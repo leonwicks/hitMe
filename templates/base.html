@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}hitMe{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+{% block header %}
+<header class="site-header">
+  <a href="/" class="logo">hitMe</a>
+  <nav class="nav">
+    {% if user is defined and user %}
+    <a href="/dashboard" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">For you</a>
+    <a href="/history"   class="nav-link {% if active_page == 'history'   %}active{% endif %}">History</a>
+    <a href="/logout"    class="nav-link">Log out</a>
+    {% endif %}
+  </nav>
+</header>
+{% endblock %}
+
+{% block body %}{% endblock %}
+
+</body>
+</html>

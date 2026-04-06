@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% set active_page = "history" %}
+
+{% block title %}hitMe — History{% endblock %}
+
+{% block body %}
+<div class="page">
+
+  <div class="history-header">
+    <h2>Your history</h2>
+    <p>Albums we've recommended to you.</p>
+  </div>
+
+  {% if recommendations %}
+  <div class="history-list">
+    {% for rec in recommendations %}
+    <a class="history-item" href="{{ rec.spotify_url or '#' }}" target="_blank" rel="noopener">
+
+      {% if rec.image_url %}
+      <img class="history-art" src="{{ rec.image_url }}" alt="{{ rec.album_name }}">
+      {% else %}
+      <div class="history-art-placeholder">🎵</div>
+      {% endif %}
+
+      <div class="history-info">
+        <div class="history-album">{{ rec.album_name }}</div>
+        <div class="history-artist">{{ rec.artist_name }}</div>
+      </div>
+
+      <div class="history-right">
+        <div class="history-date">
+          {{ rec.recommendation_date.strftime("%d %b %Y") }}
+        </div>
+        {% if rec.bucket %}
+        <div class="history-bucket bucket-{{ rec.bucket }}">
+          {% if rec.bucket == "comfort" %}Favourite
+          {% elif rec.bucket == "adjacent" %}Discovery
+          {% else %}Rediscovery
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+    </a>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="history-empty">
+    <div style="font-size:2.5rem;margin-bottom:1rem;">📭</div>
+    <p>No recommendations yet. Head to your <a href="/dashboard" style="color:var(--green)">dashboard</a> to get started.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
