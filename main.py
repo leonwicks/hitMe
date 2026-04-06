@@ -89,6 +89,8 @@ async def fetch_top(token: str, item_type: str, time_range: str) -> list:
 
     if resp.status_code == 401:
         return None  # token expired
+    if resp.status_code == 403:
+        return "forbidden"
     if resp.status_code != 200:
         return []
 
@@ -129,9 +131,11 @@ async def stats(request: Request):
         tracks = await fetch_top(token, "tracks", time_range)
 
         if artists is None or tracks is None:
-            # Token expired
             request.session.clear()
             return RedirectResponse("/")
+
+        if artists == "forbidden" or tracks == "forbidden":
+            return render("stats.html", results={}, error="forbidden")
 
         results[label] = {"artists": artists, "tracks": tracks}
 

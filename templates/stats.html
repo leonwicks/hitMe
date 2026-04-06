@@ -216,6 +216,20 @@
   </div>
   {% endfor %}
 
+  {% if error == 'forbidden' %}
+  <div id="error-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:100;">
+    <div style="background:#181818;border:1px solid #333;border-radius:14px;padding:2rem;max-width:420px;width:90%;text-align:center;">
+      <div style="font-size:2.5rem;margin-bottom:1rem;">🔒</div>
+      <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:0.75rem;">Access restricted</h2>
+      <p style="color:#aaa;font-size:0.9rem;line-height:1.6;margin-bottom:1.5rem;">
+        This app is in development mode and your Spotify account hasn't been added yet.
+        Ask the app owner to add your email address in the Spotify Developer Dashboard.
+      </p>
+      <a href="/logout" style="display:inline-block;background:#1db954;color:#000;font-weight:700;padding:0.65rem 1.75rem;border-radius:50px;text-decoration:none;">Back to login</a>
+    </div>
+  </div>
+  {% endif %}
+
   <script>
     function showPeriod(period, btn) {
       document.querySelectorAll('.period').forEach(el => el.classList.remove('active'));
