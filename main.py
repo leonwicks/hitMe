@@ -2,7 +2,7 @@ import os
 import httpx
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 
@@ -20,7 +20,11 @@ SCOPES = "user-top-read"
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
-templates = Jinja2Templates(directory="templates")
+_jinja_env = Environment(loader=FileSystemLoader("templates"), cache_size=0)
+
+
+def render(template_name: str, **context) -> HTMLResponse:
+    return HTMLResponse(_jinja_env.get_template(template_name).render(**context))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -28,7 +32,7 @@ async def index(request: Request):
     token = request.session.get("access_token")
     if token:
         return RedirectResponse("/stats")
-    return templates.TemplateResponse("index.html", {"request": request})
+    return render("index.html")
 
 
 @app.get("/auth/login")
@@ -131,4 +135,4 @@ async def stats(request: Request):
 
         results[label] = {"artists": artists, "tracks": tracks}
 
-    return templates.TemplateResponse("stats.html", {"request": request, "results": results})
+    return render("stats.html", results=results)
