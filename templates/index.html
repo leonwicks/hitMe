@@ -10,8 +10,19 @@
   <p class="hero-tagline">One album. Just for you.</p>
   <p class="hero-sub">Connect Spotify and we'll recommend the single best album to listen to right now.</p>
 
-  {% if error %}
-  <div class="error-banner" style="max-width:440px;margin:0 auto 2rem;">{{ error }}</div>
+  {% if access_requested %}
+  <div class="success-banner" style="max-width:440px;margin:0 auto 2rem;">
+    Request sent! You'll be added to the approved list shortly.
+  </div>
+  {% elif error %}
+  <div class="error-banner" style="max-width:440px;margin:0 auto 2rem;">
+    {{ error }}
+    {% if show_request_modal %}
+    <button class="request-access-link" onclick="document.getElementById('access-modal').classList.add('visible')">
+      Request access &rarr;
+    </button>
+    {% endif %}
+  </div>
   {% endif %}
 
   <a href="/login" class="btn btn-primary">
@@ -22,4 +33,36 @@
   </a>
   <p class="hero-note">Read-only access to your listening history. No posts, no follows.</p>
 </main>
+
+<!-- Access request modal -->
+<div id="access-modal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('visible')">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <button class="modal-close" aria-label="Close" onclick="document.getElementById('access-modal').classList.remove('visible')">&times;</button>
+    <h2 id="modal-title">Request access</h2>
+    <p class="modal-sub">Enter your details and we'll add you to the approved list.</p>
+    <form method="post" action="/request-access" class="access-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="first_name">First name</label>
+          <input type="text" id="first_name" name="first_name" required autocomplete="given-name" placeholder="Jane">
+        </div>
+        <div class="form-group">
+          <label for="last_name">Last name</label>
+          <input type="text" id="last_name" name="last_name" required autocomplete="family-name" placeholder="Smith">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="email">Spotify account email</label>
+        <input type="email" id="email" name="email" required autocomplete="email" placeholder="jane@example.com">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem;">
+        Send request
+      </button>
+    </form>
+  </div>
+</div>
+
+{% if show_request_modal %}
+<script>document.getElementById('access-modal').classList.add('visible');</script>
+{% endif %}
 {% endblock %}

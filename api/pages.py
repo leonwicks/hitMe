@@ -29,13 +29,14 @@ _ERROR_MESSAGES = {
     "spotify_error": "An error occurred with Spotify. Please try again.",
     "no_token": "No access token received from Spotify.",
     "forbidden": (
-        "Your Spotify account hasn't been added to this app yet. "
-        "Ask the developer to add your email in the Spotify Developer Dashboard."
+        "Your Spotify account hasn't been approved yet. "
+        "Fill out the form below to request access."
     ),
     "profile_error": "Could not fetch your Spotify profile. Please try again.",
     "no_user_id": "Spotify did not return a user ID.",
     "recommend_failed": "Could not generate a recommendation right now. Please try again.",
     "no_candidates": "We couldn't find enough album data from your Spotify account to make a recommendation.",
+    "request_failed": "Could not send your access request. Please try again.",
 }
 
 
@@ -46,7 +47,14 @@ async def index(request: Request):
         return RedirectResponse("/dashboard")
     error_key = request.query_params.get("error")
     error_msg = _ERROR_MESSAGES.get(error_key) if error_key else None
-    return render("index.html", error=error_msg)
+    access_requested = request.query_params.get("access_requested") == "1"
+    show_request_modal = error_key == "forbidden"
+    return render(
+        "index.html",
+        error=error_msg,
+        show_request_modal=show_request_modal,
+        access_requested=access_requested,
+    )
 
 
 @router.get("/dashboard", response_class=HTMLResponse)

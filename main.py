@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from config import settings
 import models.db_models  # noqa: F401 — imported for side-effects (registers models for Alembic)
-from api import auth, pages, recommendations
+from api import auth, pages, recommendations, access_request
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,6 +38,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth.router)
 app.include_router(pages.router)
 app.include_router(recommendations.router)
+app.include_router(access_request.router)
 
 
 @app.on_event("startup")
