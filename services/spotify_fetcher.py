@@ -71,6 +71,7 @@ def _parse_album(raw: dict) -> Optional[AlbumData]:
         image_url=images[0]["url"] if images else "",
         spotify_url=raw.get("external_urls", {}).get("spotify", ""),
         release_date=raw.get("release_date", ""),
+        total_tracks=raw.get("total_tracks", 0) or 0,
     )
 
 

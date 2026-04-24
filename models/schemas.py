@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from datetime import datetime
 
 
 @dataclass
@@ -36,6 +35,7 @@ class AlbumData:
     image_url: str
     spotify_url: str
     release_date: str = ""
+    total_tracks: int = 0
 
 
 @dataclass
@@ -67,13 +67,25 @@ class AlbumCandidate:
     # Raw signal counts
     is_saved_album: bool = False
     top_track_count: int = 0
+    long_term_top_track_count: int = 0
     saved_track_count: int = 0
     recent_play_count: int = 0
+    total_tracks: int = 0               # 0 = unknown
 
     # Computed scores
     artist_affinity: float = 0.0
     album_score: float = 0.0
     bucket: str = "adjacent"
+
+    # Discovery
+    source: str = "known"               # "known" | "discovery"
+    genre_overlap_score: float = 0.0    # set by discovery_generator
+
+    # Mood (Phase 6) — separate scores per dimension
+    mood_score: float = 0.5             # combined, kept for explanation/display
+    vibe_score: float = 0.5             # set by mood_scorer (tone + energy axes)
+    mode_score: float = 0.5             # set by mood_scorer (engagement axis)
+    weight_score: float = 0.5           # set by mood_scorer (0=light genre, 1=heavy)
 
     # For explanation
     top_term_artist: str = ""   # "long" | "medium" | "short" | ""
@@ -84,3 +96,13 @@ class AlbumCandidate:
 class Explanation:
     summary: str
     bullets: list[str]
+
+
+@dataclass
+class QuestionnaireResponse:
+    """User's mood/context from the step-through questionnaire."""
+    vibe: str = ""              # "melancholy"|"energised"|"warm"|"unsettled"|"focused"|""
+    listening_mode: str = ""    # "immersive"|"background"|"unwind"|""
+    familiarity: str = "balanced"  # "familiar"|"rediscovery"|"new"|"balanced"
+    nostalgia: int = 0          # 0=any | 1=2015+ | 2=2005-14 | 4=1980-95 | 5=pre-1980
+    heaviness: int = 5          # 0=light genres … 10=heavy genres (rock/metal/dnb)

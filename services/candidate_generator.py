@@ -48,11 +48,16 @@ def generate(data: ListeningData) -> list[AlbumCandidate]:
         if album.album_id not in albums_by_id:
             albums_by_id[album.album_id] = _album_to_candidate(album)
 
+    # Track total_tracks from sources that provide it (saved albums, artist albums)
+    total_tracks_by_id: dict[str, int] = {}
+
     # Saved albums
     saved_album_ids: set[str] = set()
     for album in data.saved_albums:
         add(album)
         saved_album_ids.add(album.album_id)
+        if album.total_tracks:
+            total_tracks_by_id[album.album_id] = album.total_tracks
 
     # Albums extracted from top tracks (all three ranges)
     for track in (*data.long_term_tracks, *data.medium_term_tracks, *data.short_term_tracks):
@@ -97,6 +102,8 @@ def generate(data: ListeningData) -> list[AlbumCandidate]:
     for artist_albums in data.artist_albums.values():
         for album in artist_albums:
             add(album)
+            if album.total_tracks:
+                total_tracks_by_id[album.album_id] = album.total_tracks
 
     # -----------------------------------------------------------------------
     # 2. Annotate candidates with raw signal counts
@@ -107,6 +114,12 @@ def generate(data: ListeningData) -> list[AlbumCandidate]:
     for track in (*data.long_term_tracks, *data.medium_term_tracks, *data.short_term_tracks):
         if track.album_id:
             top_track_album_ids[track.album_id] += 1
+
+    # long_term_top_track_count: only from long-term top tracks
+    long_term_top_album_ids: dict[str, int] = defaultdict(int)
+    for track in data.long_term_tracks:
+        if track.album_id:
+            long_term_top_album_ids[track.album_id] += 1
 
     # saved_track_count: how many saved tracks are on each album
     saved_track_album_counts: dict[str, int] = defaultdict(int)
@@ -123,13 +136,19 @@ def generate(data: ListeningData) -> list[AlbumCandidate]:
     for candidate in albums_by_id.values():
         candidate.is_saved_album = candidate.album_id in saved_album_ids
         candidate.top_track_count = top_track_album_ids.get(candidate.album_id, 0)
+        candidate.long_term_top_track_count = long_term_top_album_ids.get(candidate.album_id, 0)
         candidate.saved_track_count = saved_track_album_counts.get(candidate.album_id, 0)
         candidate.recent_play_count = recent_play_album_counts.get(candidate.album_id, 0)
+        candidate.total_tracks = total_tracks_by_id.get(candidate.album_id, 0)
 
     candidates = list(albums_by_id.values())
 
     # Filter out candidates with no image (display would be poor)
     candidates = [c for c in candidates if c.image_url]
+
+    # Filter out EPs and singles — only recommend albums with more than 3 tracks
+    # (total_tracks == 0 means unknown, so we allow those through)
+    candidates = [c for c in candidates if c.total_tracks == 0 or c.total_tracks > 3]
 
     logger.info("Generated %d album candidates", len(candidates))
     return candidates

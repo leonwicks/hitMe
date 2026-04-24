@@ -15,13 +15,11 @@
   <div class="error-banner">{{ error }}</div>
   {% endif %}
 
-  <!-- Action button -->
+  <!-- Action -->
   <div class="dashboard-actions">
-    <form method="POST" action="/recommend" id="rec-form">
-      <button type="submit" class="btn btn-primary" id="rec-btn">
-        {% if recommendation %}Get a new recommendation{% else %}Get my recommendation{% endif %}
-      </button>
-    </form>
+    <a href="/questionnaire" class="btn btn-primary">
+      {% if recommendation %}Get a new recommendation{% else %}Get my recommendation{% endif %}
+    </a>
     {% if recommendation %}
     <a href="/history" class="btn btn-outline">View history</a>
     {% endif %}
@@ -44,8 +42,9 @@
         {% if recommendation.bucket %}
         <span class="rec-bucket bucket-{{ recommendation.bucket }}">
           {% if recommendation.bucket == "comfort" %}Favourite
-          {% elif recommendation.bucket == "adjacent" %}Discovery
-          {% else %}Rediscovery
+          {% elif recommendation.bucket == "rediscovery" %}Rediscovery
+          {% elif recommendation.bucket == "discovery" %}New discovery
+          {% else %}Discovery
           {% endif %}
         </span>
         {% endif %}
@@ -80,11 +79,14 @@
         <div class="score-bars">
           {% set rows = [
             ("Artist affinity",      bd.get("artist_affinity", 0),        false),
+            ("Genre overlap",        bd.get("genre_overlap", 0),           false),
             ("Top track overlap",    bd.get("top_track_overlap", 0),       false),
             ("Saved track overlap",  bd.get("saved_track_overlap", 0),     false),
             ("Recent play overlap",  bd.get("recent_play_overlap", 0),     false),
             ("Saved album bonus",    bd.get("saved_album_bonus", 0),       false),
             ("Overfamiliarity",      bd.get("overfamiliarity_penalty", 0), true),
+            ("Mood",                 bd.get("mood_score", 0),              false),
+            ("Era match",            bd.get("nostalgia_score", 0),         false),
           ] %}
           {% for label, val, is_neg in rows %}
           <div class="score-row">

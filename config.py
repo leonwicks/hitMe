@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     database_url: str = "sqlite:///./hitme.db"
 
+    lastfm_api_key: str = "20d663b86b0d804c8130e942d254a1e7"
+
     # Email notifications (for access requests)
     notification_email: str = ""   # your personal email — receives access requests
     smtp_host: str = "smtp.gmail.com"

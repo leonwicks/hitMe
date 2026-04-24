@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% set active_page = "debug" %}
+
+{% block title %}hitMe — Algorithm tester{% endblock %}
+
+{% block body %}
+<div class="page debug-page">
+
+  <div class="dashboard-greeting">
+    <h2>Algorithm tester</h2>
+    <p>Top 3 results for every questionnaire combination. Data from DB — no API calls.</p>
+  </div>
+
+  <div class="debug-options">
+    {% if ignore_history %}
+    <a href="/debug/algorithm" class="debug-toggle debug-toggle-on">Ignoring history — click to restore</a>
+    {% else %}
+    <a href="/debug/algorithm?ignore_history=1" class="debug-toggle">Ignore recent recommendations</a>
+    {% endif %}
+  </div>
+
+  {% if error %}
+  <div class="error-banner">{{ error }}</div>
+  {% else %}
+
+  <!-- Filters -->
+  <div class="debug-filters">
+    <div class="debug-filter-group">
+      <label for="f-vibe">Vibe</label>
+      <select id="f-vibe" class="debug-select">
+        <option value="">All</option>
+        {% for v in vibes %}<option value="{{ v }}">{{ v }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="debug-filter-group">
+      <label for="f-mode">Mode</label>
+      <select id="f-mode" class="debug-select">
+        <option value="">All</option>
+        {% for m in modes %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="debug-filter-group">
+      <label for="f-fam">Familiarity</label>
+      <select id="f-fam" class="debug-select">
+        <option value="">All</option>
+        {% for f in familiarities %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="debug-filter-group">
+      <label for="f-nos">Era</label>
+      <select id="f-nos" class="debug-select">
+        <option value="">All</option>
+        {% for n in nostalgias %}
+        <option value="{{ n }}">{{ era_labels[n] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="debug-filter-group debug-filter-search">
+      <label for="f-album">Album / artist</label>
+      <input type="text" id="f-album" class="debug-input" placeholder="Search…">
+    </div>
+    <span class="debug-count" id="row-count">{{ rows|length }} combinations</span>
+  </div>
+
+  <!-- Table -->
+  <div class="debug-table-wrap">
+    <table class="debug-table" id="debug-table">
+      <thead>
+        <tr>
+          <th>Vibe</th>
+          <th>Mode</th>
+          <th>Familiarity</th>
+          <th>Era</th>
+          <th>#1</th>
+          <th>#2</th>
+          <th>#3</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr
+          data-vibe="{{ row.vibe }}"
+          data-mode="{{ row.mode }}"
+          data-fam="{{ row.familiarity }}"
+          data-nos="{{ row.nostalgia }}"
+          data-text="{{ row.vibe }} {{ row.mode }} {{ row.familiarity }}
+            {%- for pick in row.top3 %} {{ pick.album }} {{ pick.artist }}{% endfor %}"
+        >
+          <td><span class="debug-tag vibe-{{ row.vibe }}">{{ row.vibe }}</span></td>
+          <td><span class="debug-tag">{{ row.mode }}</span></td>
+          <td><span class="debug-tag fam-{{ row.familiarity }}">{{ row.familiarity }}</span></td>
+          <td class="debug-era">{{ row.era_label }}</td>
+          {% for pick in row.top3 %}
+          <td class="debug-pick">
+            <span class="debug-pick-album">{{ pick.album }}</span>
+            <span class="debug-pick-artist">{{ pick.artist }}</span>
+            <span class="debug-pick-meta">
+              <span class="rec-bucket bucket-{{ pick.bucket }}">{{ pick.bucket }}</span>
+              {{ pick.release }}
+              <span class="debug-score">{{ "%.2f"|format(pick.score) }}</span>
+              <span class="debug-mood" title="vibe score">v{{ "%.2f"|format(pick.vibe_score) }}</span>
+              <span class="debug-mood" title="mode score">m{{ "%.2f"|format(pick.mode_score) }}</span>
+              <span class="debug-mood" title="weight score">w{{ "%.2f"|format(pick.weight_score) }}</span>
+            </span>
+          </td>
+          {% else %}
+          <td class="debug-empty" colspan="3">No results</td>
+          {% endfor %}
+          {% if row.top3|length < 3 %}
+          {% for _ in range(3 - row.top3|length) %}<td class="debug-empty">—</td>{% endfor %}
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% endif %}
+</div>
+
+<script>
+  const selVibe = document.getElementById('f-vibe');
+  const selMode = document.getElementById('f-mode');
+  const selFam  = document.getElementById('f-fam');
+  const selNos  = document.getElementById('f-nos');
+  const inpAlbum = document.getElementById('f-album');
+  const countEl  = document.getElementById('row-count');
+
+  function applyFilters() {
+    const vibe  = selVibe.value;
+    const mode  = selMode.value;
+    const fam   = selFam.value;
+    const nos   = selNos.value;
+    const text  = inpAlbum.value.toLowerCase();
+
+    let visible = 0;
+    document.querySelectorAll('#debug-table tbody tr').forEach(row => {
+      const match =
+        (!vibe || row.dataset.vibe === vibe) &&
+        (!mode || row.dataset.mode === mode) &&
+        (!fam  || row.dataset.fam  === fam)  &&
+        (!nos  || row.dataset.nos  === nos)  &&
+        (!text || row.dataset.text.toLowerCase().includes(text));
+
+      row.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    countEl.textContent = visible + ' combinations';
+  }
+
+  [selVibe, selMode, selFam, selNos].forEach(el => el.addEventListener('change', applyFilters));
+  inpAlbum.addEventListener('input', applyFilters);
+</script>
+{% endblock %}

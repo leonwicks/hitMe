@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% set active_page = "dashboard" %}
+
+{% block title %}hitMe — What are you feeling?{% endblock %}
+
+{% block body %}
+<div class="q-page">
+
+  <form method="POST" action="/recommend" id="q-form">
+    <input type="hidden" name="vibe"           id="f-vibe"           value="">
+    <input type="hidden" name="listening_mode"  id="f-listening-mode"  value="background">
+    <input type="hidden" name="familiarity"    id="f-familiarity"    value="balanced">
+    <input type="hidden" name="nostalgia"      id="f-nostalgia"      value="0">
+    <input type="hidden" name="heaviness"      id="f-heaviness"      value="5">
+
+    <!-- Progress dots: 6 question steps (0–5) -->
+    <div class="q-progress" aria-hidden="true">
+      <span class="q-dot active" data-step="0"></span>
+      <span class="q-dot"       data-step="1"></span>
+      <span class="q-dot"       data-step="2"></span>
+      <span class="q-dot"       data-step="3"></span>
+      <span class="q-dot"       data-step="4"></span>
+      <span class="q-dot"       data-step="5"></span>
+    </div>
+
+    <!-- ── Step 0: Mood / tone ── -->
+    <section class="q-step active" data-step="0">
+      <p class="q-step-hint">Mood</p>
+      <h1 class="q-question">What&rsquo;s the feeling?</h1>
+      <div class="q-slider-screen">
+        <div class="q-slider-ends">
+          <div class="q-end">
+            <span class="q-end-emoji">🌙</span>
+            <span class="q-end-label">Night Drive</span>
+          </div>
+          <div class="q-end q-end-right">
+            <span class="q-end-emoji">☀️</span>
+            <span class="q-end-label">Sunny Day</span>
+          </div>
+        </div>
+        <input type="range" id="s-tone" min="0" max="10" value="5"
+               class="q-slider s-tone">
+      </div>
+      <button type="button" class="q-next-btn" data-advance="tone">Next</button>
+    </section>
+
+    <!-- ── Step 1: Energy ── -->
+    <section class="q-step" data-step="1">
+      <p class="q-step-hint">Energy</p>
+      <h1 class="q-question">How fast does it need to move?</h1>
+      <div class="q-slider-screen">
+        <div class="q-slider-ends">
+          <div class="q-end">
+            <span class="q-end-emoji">💤</span>
+            <span class="q-end-label">Let Me Chill</span>
+          </div>
+          <div class="q-end q-end-right">
+            <span class="q-end-emoji">🕺</span>
+            <span class="q-end-label">Let Me Dance</span>
+          </div>
+        </div>
+        <input type="range" id="s-energy" min="0" max="10" value="5"
+               class="q-slider s-energy">
+      </div>
+      <button type="button" class="q-next-btn" data-advance="energy">Next</button>
+    </section>
+
+    <!-- ── Step 2: Genre weight ── -->
+    <section class="q-step" data-step="2">
+      <p class="q-step-hint">Intensity</p>
+      <h1 class="q-question">How heavy should it be?</h1>
+      <div class="q-slider-screen">
+        <div class="q-slider-ends">
+          <div class="q-end">
+            <span class="q-end-emoji">🌬️</span>
+            <span class="q-end-label">Light &amp; breezy</span>
+          </div>
+          <div class="q-end q-end-right">
+            <span class="q-end-emoji">🤘</span>
+            <span class="q-end-label">Heavy</span>
+          </div>
+        </div>
+        <input type="range" id="s-weight" min="0" max="10" value="5"
+               class="q-slider s-weight">
+      </div>
+      <button type="button" class="q-next-btn" data-advance="weight">Next</button>
+    </section>
+
+    <!-- ── Step 3: Era ── -->
+    <section class="q-step" data-step="3">
+      <p class="q-step-hint">Era</p>
+      <h1 class="q-question">From when?</h1>
+      <div class="q-slider-screen">
+        <div class="q-slider-ends">
+          <div class="q-end">
+            <span class="q-end-emoji">⏮</span>
+            <span class="q-end-label">Way back</span>
+          </div>
+          <div class="q-end q-end-right">
+            <span class="q-end-emoji">⏭</span>
+            <span class="q-end-label">Right now</span>
+          </div>
+        </div>
+        <input type="range" id="s-era" min="0" max="10" value="5"
+               class="q-slider s-era">
+        <div class="q-era-label" id="era-label">Any era</div>
+      </div>
+      <button type="button" class="q-next-btn" data-advance="era">Next</button>
+    </section>
+
+    <!-- ── Step 4: Engagement ── -->
+    <section class="q-step" data-step="4">
+      <p class="q-step-hint">Listening</p>
+      <h1 class="q-question">How are you listening?</h1>
+      <div class="q-slider-screen">
+        <div class="q-slider-ends">
+          <div class="q-end">
+            <span class="q-end-emoji">🎵</span>
+            <span class="q-end-label">In the background</span>
+          </div>
+          <div class="q-end q-end-right">
+            <span class="q-end-emoji">🎧</span>
+            <span class="q-end-label">Headphones in</span>
+          </div>
+        </div>
+        <input type="range" id="s-engagement" min="0" max="10" value="5"
+               class="q-slider s-engagement">
+      </div>
+      <button type="button" class="q-next-btn" data-advance="engagement">Next</button>
+    </section>
+
+    <!-- ── Step 5: Familiarity (cards) ── -->
+    <section class="q-step" data-step="5">
+      <p class="q-step-hint">Discovery</p>
+      <h1 class="q-question">What are you after?</h1>
+      <div class="q-cards">
+        <button type="button" class="q-card" data-field="familiarity" data-value="familiar">
+          <span class="q-card-label">An old favourite</span>
+          <span class="q-card-sub">like seeing a friend</span>
+        </button>
+        <button type="button" class="q-card" data-field="familiarity" data-value="rediscovery">
+          <span class="q-card-label">Something I&rsquo;ve forgotten</span>
+          <span class="q-card-sub">in my library, unplayed</span>
+        </button>
+        <button type="button" class="q-card" data-field="familiarity" data-value="new">
+          <span class="q-card-label">Introduce me</span>
+          <span class="q-card-sub">an artist I&rsquo;ve never heard of</span>
+        </button>
+        <button type="button" class="q-card" data-field="familiarity" data-value="balanced">
+          <span class="q-card-label">Surprise me</span>
+          <span class="q-card-sub">I trust you</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Loading screen ── -->
+    <section class="q-step q-loading-step" data-step="6">
+      <div class="q-loading-inner">
+        <div class="q-spinner"></div>
+        <p class="q-loading-text">Finding your album&hellip;</p>
+      </div>
+    </section>
+
+  </form>
+</div>
+
+<script>
+  // ── Mappings ──────────────────────────────────────────────
+  function mapVibe(energy, tone) {
+    if (energy >= 6 && tone >= 6) return 'energised';
+    if (energy >= 6 && tone <= 4) return 'unsettled';
+    if (energy <= 4 && tone >= 6) return 'warm';
+    if (energy <= 4 && tone <= 4) return 'melancholy';
+    return 'focused';
+  }
+
+  function mapEra(v) {
+    if (v <= 1) return 5;
+    if (v <= 3) return 4;
+    if (v <= 6) return 0;
+    if (v <= 8) return 2;
+    return 1;
+  }
+
+  function eraText(v) {
+    if (v <= 1) return 'Way back \u00b7 pre\u20111980';
+    if (v <= 3) return 'Before the internet \u00b7 1980\u201395';
+    if (v <= 6) return 'Any era';
+    if (v <= 8) return 'Recent past \u00b7 2005\u201314';
+    return 'Right now \u00b7 2015+';
+  }
+
+  function mapEngagement(v) {
+    if (v <= 3) return 'background';
+    if (v <= 6) return 'unwind';
+    return 'immersive';
+  }
+
+  // ── Slider state ─────────────────────────────────────────
+  const vals = { tone: 5, energy: 5, weight: 5, era: 5, engagement: 5 };
+
+  // ── Slider fill (updates CSS custom prop for tint) ───────
+  function updateFill(slider) {
+    const pct = (parseInt(slider.value) / parseInt(slider.max)) * 100;
+    slider.style.setProperty('--fill', `${pct}%`);
+  }
+
+  document.querySelectorAll('.q-slider').forEach(s => {
+    s.addEventListener('input', () => {
+      updateFill(s);
+      // Live era label
+      if (s.id === 's-era') {
+        document.getElementById('era-label').textContent = eraText(parseInt(s.value));
+      }
+    });
+    updateFill(s);
+  });
+
+  // ── Next buttons ─────────────────────────────────────────
+  document.querySelectorAll('.q-next-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.advance;
+      const slider = document.getElementById('s-' + key);
+      vals[key] = parseInt(slider.value);
+      advance();
+    });
+  });
+
+  // ── Familiarity cards ────────────────────────────────────
+  document.querySelectorAll('.q-card').forEach(btn => {
+    btn.addEventListener('click', function () {
+      this.closest('.q-cards').querySelectorAll('.q-card').forEach(s => s.classList.remove('selected'));
+      this.classList.add('selected');
+      document.getElementById('f-familiarity').value = this.dataset.value;
+      // Write all slider-derived fields just before advancing to loading
+      document.getElementById('f-vibe').value           = mapVibe(vals.energy, vals.tone);
+      document.getElementById('f-listening-mode').value = mapEngagement(vals.engagement);
+      document.getElementById('f-nostalgia').value      = mapEra(vals.era);
+      document.getElementById('f-heaviness').value      = vals.weight;
+      setTimeout(advance, 220);
+    });
+  });
+
+  // ── Step navigation ───────────────────────────────────────
+  const TOTAL_STEPS = 6;   // steps 0–5 are questions; step 6 is loading
+  let currentStep = 0;
+
+  function showStep(n) {
+    document.querySelectorAll('.q-step').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.q-dot').forEach(el => el.classList.remove('active'));
+    const step = document.querySelector(`.q-step[data-step="${n}"]`);
+    const dot  = document.querySelector(`.q-dot[data-step="${n}"]`);
+    if (step) step.classList.add('active');
+    if (dot)  dot.classList.add('active');
+  }
+
+  function advance() {
+    currentStep++;
+    if (currentStep >= TOTAL_STEPS) {
+      showStep(6);  // loading screen
+      setTimeout(() => document.getElementById('q-form').submit(), 1200);
+    } else {
+      showStep(currentStep);
+    }
+  }
+</script>
+{% endblock %}

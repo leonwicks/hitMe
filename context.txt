@@ -1,0 +1,368 @@
+================================================================================
+HITME — PROJECT CONTEXT
+Last updated: 2026-04-24
+================================================================================
+
+
+--------------------------------------------------------------------------------
+1. PURPOSE AND GOAL
+--------------------------------------------------------------------------------
+
+HitMe is a personal music recommendation web app. The core concept is simple:
+connect your Spotify account, answer four short mood questions, and receive one
+album recommendation. The recommendation is personalised to your listening
+history and your stated mood for the day.
+
+The long-term vision is a single recommendation per day — a deliberate ritual
+rather than an infinite feed. That constraint is intentionally not implemented
+yet (to make testing easier during development). When it is implemented, the
+questionnaire will feel like the meaningful daily act that earns the reveal.
+
+The app is for personal use. It has an access-request gating system so only
+approved Spotify accounts can log in (Spotify's development mode limits which
+accounts can access an app).
+
+
+--------------------------------------------------------------------------------
+2. TECH STACK
+--------------------------------------------------------------------------------
+
+- Backend:       FastAPI + Jinja2 (server-rendered HTML, no JS framework)
+- Database:      SQLAlchemy (sync) + Alembic migrations + SQLite (dev)
+- HTTP client:   httpx async (all Spotify and Last.fm API calls)
+- Config:        pydantic-settings (.env file)
+- Python:        3.9 — use Optional[X] not X | None in route params;
+                 use `from __future__ import annotations` elsewhere
+- Run:           uvicorn main:app --reload --port 8000
+                 (from the hitMe/ directory, NOT uvicorn backend.main:app)
+
+
+--------------------------------------------------------------------------------
+3. HOW TO RUN
+--------------------------------------------------------------------------------
+
+cd "c:\Users\Leon\Documents\Projects\Music Recommender\hitMe"
+.venv\Scripts\activate
+alembic upgrade head          # only needed after pulling new migrations
+uvicorn main:app --reload --port 8000
+
+Open http://localhost:8000
+
+
+--------------------------------------------------------------------------------
+4. ENVIRONMENT (.env)
+--------------------------------------------------------------------------------
+
+SPOTIFY_CLIENT_ID=...
+SPOTIFY_CLIENT_SECRET=...
+SPOTIFY_REDIRECT_URI=http://localhost:8000/auth/spotify/callback
+SECRET_KEY=...
+DATABASE_URL=sqlite:///./hitme.db
+LASTFM_API_KEY=20d663b86b0d804c8130e942d254a1e7
+
+Email fields (notification_email, smtp_*) are for access-request emails and
+are optional for local dev.
+
+
+--------------------------------------------------------------------------------
+5. USER FLOW
+--------------------------------------------------------------------------------
+
+/ (index)          → login page. Unapproved users see access request form.
+/login             → redirects to Spotify OAuth
+/auth/spotify/callback → token exchange, upsert user/account, session cookie
+/dashboard         → shows latest recommendation + button to get a new one
+/questionnaire     → 4-question step-through mood form (leads to POST /recommend)
+POST /recommend    → full pipeline: sync → enrich → candidates → rank → save → redirect /dashboard
+/history           → list of past recommendations
+/logout            → clears session
+
+
+--------------------------------------------------------------------------------
+6. RECOMMENDATION PIPELINE (what happens on POST /recommend)
+--------------------------------------------------------------------------------
+
+Step 1 — SPOTIFY SYNC (services/spotify_sync.py)
+  Checks user_sync_status for each signal type.
+  If stale (>= 7 days or never fetched), re-fetches from Spotify and writes to DB.
+  Fresh signals are loaded directly from DB.
+  Recently played is ALWAYS fetched live (never stored — changes too fast).
+  Returns a ListeningData object populated from DB + live recently played.
+
+Step 2 — ENRICHMENT + TASTE PROFILE (services/enrichment_coordinator.py)
+  No-op if user_taste_profiles.updated_at < 24 hours ago.
+  Otherwise:
+    a) Batch-fetch Spotify genres for known artists → artists.genres
+    b) Fetch Last.fm artist.getSimilar → artist_similarity_edges
+    c) Fetch Last.fm artist.getTopTags → artist_tags
+    d) Attempt to resolve unmatched Last.fm artists → Spotify IDs (artist_matcher.py)
+    e) Rebuild weighted genre + tag profile → user_taste_profiles
+
+Step 3 — CANDIDATE GENERATION (services/candidate_generator.py)
+  Builds the album pool from ListeningData (saved albums, top-track albums,
+  saved-track albums, recently played albums, top-artist discographies).
+  Annotates each with: is_saved_album, top_track_count, saved_track_count,
+  recent_play_count.
+
+Step 4 — DISCOVERY CANDIDATES (services/discovery_generator.py)
+  Queries artist_similarity_edges for neighbours of the user's known artists
+  where spotify_artist_id is resolved but the artist has zero listening history.
+  Fetches their albums from Spotify.
+  Tags these candidates source="discovery" with a genre_overlap_score.
+  Appended to the main candidate pool.
+
+Step 5 — MOOD SCORING (services/mood_scorer.py)
+  Fetches artist tags from DB for all candidates in one batch query.
+  Scores each candidate against vibe + listening_mode tag maps.
+  Writes mood_score (0–1) to each candidate in-place.
+
+Step 6 — RANKING (services/ranker.py)
+  Pre-filters by familiarity and nostalgia (hard year filters) before scoring.
+  Scores known-artist candidates on: artist_affinity, top_track_overlap,
+  saved_track_overlap, recent_play_overlap, saved_album_bonus, overfamiliarity_penalty.
+  Scores discovery candidates on: genre_overlap_score.
+  Blends in mood_score and nostalgia_score based on which questionnaire signals
+  were provided.
+  Applies cooldowns: same album excluded 30 days; same artist excluded 7 days.
+  Deduplicates to one album per artist.
+
+Step 7 — EXPLANATION (services/explainer.py)
+  Generates a summary sentence and 2–4 bullet points explaining the pick.
+  Discovery candidates get a different explanation path than known-artist ones.
+
+Step 8 — PERSIST + REDIRECT
+  Saves to recommendation_history. Redirects to /dashboard.
+
+
+--------------------------------------------------------------------------------
+7. SCORING WEIGHTS (current values)
+--------------------------------------------------------------------------------
+
+Known-artist base score:
+  artist_affinity     × 0.35
+  top_track_overlap   × 0.30
+  saved_track_overlap × 0.20
+  recent_play_overlap × 0.20
+  saved_album_bonus   × 0.10
+  overfamiliarity     × -0.35 (penalty, only kicks in above combined 0.8)
+
+Artist affinity sub-weights:
+  long_term rank      × 1.00
+  medium_term rank    × 0.80
+  short_term rank     × 0.60
+  recent plays        × 0.50
+  saved tracks        × 0.50
+  saved album artist  × 0.70
+
+Final blend (adapts to which questionnaire signals are present):
+  mood + nostalgia:   55% base + 25% mood + 20% nostalgia
+  mood only:          65% base + 35% mood
+  nostalgia only:     60% base + 40% nostalgia
+  neither:            100% base
+
+Discovery candidates:
+  60% genre_overlap_score + 40% nostalgia_score
+
+Cooldowns:
+  Same album: hard exclusion for 30 days
+  Same artist: hard exclusion for 7 days (relaxed if pool becomes empty)
+  One album per artist in final output (deduplication after sort)
+
+
+--------------------------------------------------------------------------------
+8. QUESTIONNAIRE (4 questions)
+--------------------------------------------------------------------------------
+
+Q1 — Vibe (how do you want to feel?)
+  melancholy | energised | warm | unsettled | focused
+  → maps to Last.fm tag matching via _VIBE_TAGS in mood_scorer.py
+
+Q2 — Listening mode (how are you listening?)
+  immersive | background | energise | unwind
+  → maps to Last.fm tag matching via _LISTENING_MODE_TAGS in mood_scorer.py
+
+Q3 — Discovery appetite (what are you after?)
+  familiar | rediscovery | new | balanced
+  → maps to familiarity pre-filter in ranker.py
+  "new" = zero listening history (not just non-saved) + discovery candidates
+  "rediscovery" = saved albums with recent_play_count < 2
+  "familiar" = comfort + rediscovery buckets
+
+Q4 — Era (what era feels right?)
+  1=right now (2015+) | 2=recent past (2010+) | 4=before internet (pre-2010)
+  5=way back (pre-2000) | 0=no preference (no filter applied)
+  → maps to hard year filter + nostalgia_score in ranker.py
+  NOTE: nostalgia value 3 is intentionally unused (was the old slider midpoint).
+  Values 1, 2, 4, 5 have hard year filters. 0 = skip.
+
+
+--------------------------------------------------------------------------------
+9. DATABASE SCHEMA (3 migrations)
+--------------------------------------------------------------------------------
+
+001 — Initial schema
+  users                    id, spotify_user_id, display_name, created_at
+  spotify_accounts         user_id FK, access_token, refresh_token, expires_at, scopes
+  recommendation_history   full record of every recommendation made
+
+002 — Music graph
+  artists                  spotify_artist_id, lastfm_name, name, genres (JSON),
+                           genres/similarity/tags refreshed_at timestamps
+  artist_similarity_edges  source_artist_id FK, target_artist_id FK, similarity_score
+                           (Last.fm co-occurrence similarity, 30-day TTL)
+  artist_tags              artist_id FK, tag, weight (normalised 0–1, from Last.fm)
+  album_tags               spotify_album_id, tag, weight (Last.fm, not widely used yet)
+  user_taste_profiles      user_id FK, genre_weights (JSON), tag_weights (JSON),
+                           known_artist_ids (JSON), updated_at (24h TTL)
+
+003 — Listening signals
+  albums                   spotify_album_id, title, primary_artist_id FK, release_date,
+                           image_url, spotify_url, album_type, total_tracks
+  tracks                   spotify_track_id, title, album_id FK, primary_artist_id FK,
+                           duration_ms, explicit, track_number, popularity, spotify_url
+  artist_album_links        artist_id FK, album_id FK (discography join table)
+  user_sync_status         user_id PK, per-signal synced_at timestamps (7-day TTL each)
+  user_top_artists         user_id FK, artist_id FK, time_range, rank
+                           (fully replaced on sync — not a history table)
+  user_top_tracks          user_id FK, track_id FK, time_range, rank (same)
+  user_saved_albums        user_id FK, album_id FK, saved_at (same)
+  user_saved_tracks        user_id FK, track_id FK, saved_at (same)
+
+Recently played: always fetched live, never stored.
+
+
+--------------------------------------------------------------------------------
+10. FILE MAP
+--------------------------------------------------------------------------------
+
+ROOT
+  main.py                  App entry point. Wires FastAPI, middleware, routers.
+  config.py                Settings loaded from .env via pydantic-settings.
+  db.py                    SQLAlchemy engine + get_db dependency.
+  requirements.txt         Python dependencies.
+
+API
+  api/auth.py              GET /login, GET /auth/spotify/callback, GET /logout
+  api/pages.py             GET /, GET /dashboard, GET /questionnaire, GET /history
+  api/recommendations.py   POST /recommend — full pipeline coordinator
+  api/access_request.py    Access request form submission + email notification
+  api/_templates.py        Shared Jinja2 render helper
+
+MODELS
+  models/db_models.py      All SQLAlchemy ORM models (see schema above)
+  models/schemas.py        In-memory dataclasses: ArtistData, TrackData, AlbumData,
+                           ListeningData, AlbumCandidate, Explanation, QuestionnaireResponse
+
+REPOSITORIES
+  repositories/users.py          User + SpotifyAccount upsert/lookup
+  repositories/recommendations.py  create, get_latest, get_recent, get_history
+
+SERVICES
+  spotify_client.py        Async httpx Spotify API wrapper. Token refresh logic.
+  spotify_fetcher.py       Raw Spotify endpoint functions (_get_top_artists etc.)
+                           These are called by spotify_sync.py, not directly by routes.
+  spotify_sync.py          Sync layer: checks staleness per signal, fetches if stale,
+                           writes to DB, loads ListeningData from DB. Single entry
+                           point: get_listening_data(db, user_id, client).
+  spotify_enrichment.py    Batch-fetches Spotify genres for artists → artists.genres
+  lastfm_client.py         Async Last.fm API wrapper (read-only, API key only).
+                           get_similar_artists, get_artist_tags, get_album_tags.
+  lastfm_enrichment.py     Persists Last.fm similarity edges + artist tags.
+                           30-day TTL per artist.
+  artist_matcher.py        Resolves Last.fm artist names → Spotify IDs via search +
+                           normalised name comparison. Stores in artists table.
+  enrichment_coordinator.py  Orchestrates genres → Last.fm → matching → taste profile.
+                           No-op if taste profile is < 24h old.
+  taste_profiler.py        Builds weighted genre + tag profile from DB artist data.
+                           Persists to user_taste_profiles. 24h TTL.
+  candidate_generator.py   Stage 1: builds album pool from ListeningData. Annotates
+                           each with is_saved_album, track overlap counts.
+  discovery_generator.py   Queries similarity graph for unknown-artist candidates.
+                           Fetches their albums. Tags source="discovery".
+  mood_scorer.py           Maps vibe + listening_mode to Last.fm tag sets. Scores
+                           each candidate's mood_score via artist tags from DB.
+  ranker.py                Stage 2: pre-filters, scores, blends, deduplicates.
+  explainer.py             Converts candidate signals to human-readable bullets.
+
+TEMPLATES
+  base.html                Site shell: header nav, <head>.
+  index.html               Login page + access request modal.
+  dashboard.html           Recommendation card + score breakdown + Spotify link.
+  questionnaire.html       Step-through 4-question mood form. JS auto-advances on
+                           selection. Loading screen before submit.
+  history.html             Past recommendation list.
+  stats.html               (Exists but appears unused/incomplete.)
+
+STATIC
+  static/style.css         All CSS. Dark Spotify-green theme.
+
+ALEMBIC
+  alembic/env.py           Standard Alembic config pointing at DATABASE_URL.
+  alembic/versions/001_initial_schema.py
+  alembic/versions/002_music_graph.py
+  alembic/versions/003_listening_signals.py
+
+
+--------------------------------------------------------------------------------
+11. WHAT IS NOT YET IMPLEMENTED (known gaps)
+--------------------------------------------------------------------------------
+
+- One recommendation per day enforcement
+  The UI lets you request a new recommendation any time. This is intentional
+  during development. When ready: check recommendation_history for today's date
+  before running the pipeline; redirect to existing rec if found.
+
+- vibe and listening_mode have no effect until Last.fm tags are populated
+  The mood_scorer will return 0.5 (neutral) for all candidates if no artist tags
+  exist in the DB yet. Tags are populated lazily by enrichment_coordinator on
+  first recommendation request (and refreshed every 30 days). After the first
+  run, mood scoring will be active for artists already in the graph.
+
+- stats.html is incomplete
+  The template exists but is not wired to a route or data source.
+
+- Last.fm album tags (album_tags table) are in the schema but nothing reads
+  or writes to them in the current recommendation pipeline.
+
+- The "Turn of the millennium" era option (1995–2005) was planned in the
+  questionnaire spec but was not included in the final Q4 implementation.
+  The nostalgia=3 value maps to "no filter" (not a hard year range).
+
+- MusicBrainz integration was discussed in planning but not implemented.
+  The artist matching currently uses only Spotify search.
+
+- Audio feature centroid (Spotify audio-features endpoint) was discussed in
+  planning but not implemented. Mood scoring uses Last.fm tags only.
+
+
+--------------------------------------------------------------------------------
+12. IMPORTANT DESIGN DECISIONS TO REMEMBER
+--------------------------------------------------------------------------------
+
+- Catalogue tables (albums, tracks, artists) are shared across users.
+  Per-user signal tables (user_top_artists etc.) are fully replaced on each sync,
+  not accumulated as history.
+
+- Recently played is always live. It is not stored because it changes every
+  hour and is only used as a relative signal strength indicator, not for
+  historical analysis.
+
+- The familiarity="new" filter excludes albums with ANY listening signal
+  (top_track_count=0, saved_track_count=0, recent_play_count=0, not saved).
+  This means it only surfaces albums from artist discographies that the user
+  has never interacted with — plus discovery candidates from the similarity graph.
+
+- Discovery candidates (source="discovery") use a completely different scoring
+  path in the ranker. They are never scored on artist affinity (it would always
+  be zero). They are scored on genre_overlap_score (from the similarity graph)
+  blended with nostalgia_score.
+
+- The questionnaire is a separate page (/questionnaire), not an inline form on
+  the dashboard. The dashboard "Get my recommendation" button links to
+  /questionnaire, not directly to POST /recommend.
+
+- The enrichment_coordinator opens the Spotify client context manager itself
+  (async with client:). This means the client passed in from recommendations.py
+  must NOT already be inside a context manager when passed.
+
+================================================================================
